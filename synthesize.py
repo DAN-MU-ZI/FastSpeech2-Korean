@@ -25,6 +25,8 @@ from jamo import h2j
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def kor_preprocess(text):
+    text = text.rstrip(punctuation)
+    
     g2p=G2p()
     phone = g2p(text)
     print('after g2p: ',phone)
@@ -33,7 +35,7 @@ def kor_preprocess(text):
     phone = list(filter(lambda p: p != ' ', phone))
     phone = '{' + '}{'.join(phone) + '}'
     print('phone: ',phone)
-    phone = re.sub(r'\{[^\w\s]?\}', '{sil}', phone)
+    phone = re.sub(r'\{[^\w\s]?\}', '{sp}', phone)
     print('after re.sub: ',phone)
     phone = phone.replace('}{', ' ')
 
@@ -50,12 +52,12 @@ def get_FastSpeech2(num):
     model.eval()
     return model
 
-def synthesize(model, vocoder, text, sentence, dur_pitch_energy_aug, prefix=''):
+def synthesize(model, vocoder, text, sentence, prefix=''):
     sentence = sentence[:10] # long filename will result in OS Error
 
     mean_mel, std_mel = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "mel_stat.npy")), dtype=torch.float).to(device)
-    mean_f0, std_f0 = f0_stat = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "f0_stat.npy")), dtype=torch.float).to(device)
-    mean_energy, std_energy = energy_stat = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "energy_stat.npy")), dtype=torch.float).to(device)
+    mean_f0, std_f0 = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "f0_stat.npy")), dtype=torch.float).to(device)
+    mean_energy, std_energy = torch.tensor(np.load(os.path.join(hp.preprocessed_path, "energy_stat.npy")), dtype=torch.float).to(device)
 
     mean_mel, std_mel = mean_mel.reshape(1, -1), std_mel.reshape(1, -1)
     mean_f0, std_f0 = mean_f0.reshape(1, -1), std_f0.reshape(1, -1)
@@ -63,8 +65,8 @@ def synthesize(model, vocoder, text, sentence, dur_pitch_energy_aug, prefix=''):
 
     src_len = torch.from_numpy(np.array([text.shape[1]])).to(device)
         
-    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len, dur_pitch_energy_aug=dur_pitch_energy_aug, f0_stat=f0_stat, energy_stat=energy_stat)    
-
+    mel, mel_postnet, log_duration_output, f0_output, energy_output, _, _, mel_len = model(text, src_len)
+    
     mel_torch = mel.transpose(1, 2).detach()
     mel_postnet_torch = mel_postnet.transpose(1, 2).detach()
     f0_output = f0_output[0]
@@ -93,8 +95,7 @@ if __name__ == "__main__":
     parser.add_argument('--step', type=int, default=30000)
     args = parser.parse_args()
 
-    dur_pitch_energy_aug = [1.0, 1.0, 1.0]    	# [duration, pitch, energy]
-
+    
     model = get_FastSpeech2(args.step).to(device)
     if hp.vocoder == 'vocgan':
         vocoder = utils.get_vocgan(ckpt_path=hp.vocoder_pretrained_model_path)
@@ -105,7 +106,26 @@ if __name__ == "__main__":
     eval_sentence=['그는 괜찮은 척하려고 애쓰는 것 같았다','그녀의 사랑을 얻기 위해 애썼지만 헛수고였다','용돈을 아껴써라','그는 아내를 많이 아낀다','요즘 공부가 안돼요','한 여자가 내 옆에 앉았다']
     train_sentence=['가까운 시일 내에 한번, 댁으로 찾아가겠습니다','우리의 승리는 기적에 가까웠다','아이들의 얼굴에는 행복한 미소가 가득했다','헬륨은 공기보다 가볍다','이것은 간단한 문제가 아니다']
     test_sentence=['안녕하세요, 한동대학교 딥러닝 연구실입니다.', '이 프로젝트가 여러분에게 도움이 되었으면 좋겠습니다.', '시간이 촉박해요','이런, 큰일 났어','좀 더 먹지 그래?','제가 뭘 잘못했죠?','더 이상 묻지마']
-    
+    test_sentence=["제 자신이 부끄러워요",
+                "한글은 십오 세기에 세종대왕에 의해 만들어졌어.",
+                "그가 회복된 건 순전히 그 여자의 간호에 의한 거야.",
+                "일기예보에 의하면 날씨가 좋을 거래요.",
+                "아이엠에프는 뭘 의미합니까?",
+                "빨간 불은 위험을 의미해요.",
+                "여름철에는 매미가 우는 걸 쉽게 볼 수 있어요.",
+                "그는 기뻐서 울고 있다.",
+                "우리 형은 어릴 때 걸핏하면 저를 울렸어요.",
+                "전화 받아! 전화벨 울리잖아!",
+                "고개를 움직여 봐.",
+                "팔이 안 움직여.",
+                "오늘은 운동하기에 아주 좋은 날씨였다.",
+                "저는 매일 운동하러 헬스 클럽에 다녀요.",
+                "버스를 운전할 수 있으세요?",
+                "비 오는 날 빨리 운전하면 매우 위험하다.",
+                "그는 엉뚱한 질문으로 사람들을 곧잘 웃겼다.",
+                "그 사람 정말 웃겨.",
+                "그는 머리를 뒤로 젖히고 웃었다.",
+                "아기가 나를 보고 웃었어."]
     g2p=G2p()
     print('which sentence do you want?')
     print('1.eval_sentence 2.train_sentence 3.test_sentence 4.create new sentence')
@@ -127,7 +147,7 @@ if __name__ == "__main__":
     if mode != '4':
         for s in sentence:
             text = kor_preprocess(s)
-            synthesize(model, vocoder, text, s, dur_pitch_energy_aug, prefix='step_{}-duration_{}-pitch_{}-energy_{}'.format(args.step, dur_pitch_energy_aug[0], dur_pitch_energy_aug[1], dur_pitch_energy_aug[2]))
+            synthesize(model, vocoder, text, s, prefix='step_{}'.format(args.step))
     else:
         text = kor_preprocess(sentence)
-        synthesize(model, vocoder, text, sentence, dur_pitch_energy_aug, prefix='step_{}-pitch_{}-energy_{}'.format(args.step, dur_pitch_energy_aug[0], dur_pitch_energy_aug[1], dur_pitch_energy_aug[2]))
+        synthesize(model, vocoder, text, sentence, prefix='step_{}'.format(args.step))
