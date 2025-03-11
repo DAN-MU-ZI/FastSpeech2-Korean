@@ -1,5 +1,9 @@
 # DAN-MU-ZI/FastSpeech2-for-research
 
+# Introduction
+FastSpeech2 파인튜닝을 위해 레퍼런스의 복제한 프로젝트입니다.
+[레퍼런스 링크](https://github.com/HGU-DLLAB/Korean-FastSpeech2-Pytorch)
+
 # CUDA 설치
 인공지능환경에서 그래픽카드의 자원을 활용한다. 그래서 자원을 활용하기 위한 환경설정 중의 하나로 
 
